@@ -42,6 +42,7 @@ export type HappyChatMessageMetadata = {
     attachments?: AttachmentMetadata[]
     invokedAt?: number | null
     steered?: boolean
+    processDurationMs?: number
     durationMs?: number
     usage?: UsageData
     model?: string | null
@@ -356,6 +357,30 @@ export function aggregateResponseGroups(
     return aggregates
 }
 
+/** Presentation timing only; do not change the existing usage aggregation. */
+export function responseProcessDurations(blocks: readonly VisibleChatBlock[]): Map<string, number> {
+    const durations = new Map<string, number>()
+    let start: number | null = null
+    let first: string | null = null
+    let end: number | null = null
+    const flush = () => {
+        if (first !== null && start !== null && end !== null && end >= start) durations.set(first, end - start)
+        first = null; end = null
+    }
+    for (const block of blocks) {
+        if (visibleBlockRole(block) !== 'assistant') {
+            flush()
+            if (block.kind === 'user-text') start = block.invokedAt ?? block.createdAt
+            continue
+        }
+        first ??= block.id
+        start ??= block.invokedAt ?? block.createdAt
+        end = Math.max(end ?? 0, getBlockPresentationTimestamp(block))
+    }
+    flush()
+    return durations
+}
+
 export type BlockWithThreadMessageId = {
     block: VisibleChatBlock
     threadMessageId: string
@@ -520,7 +545,7 @@ function toThreadMessageLike(
             role: 'assistant',
             id: threadMessageId,
             createdAt: new Date(timestamp),
-            content: [{ type: 'text', text: block.text }],
+            content: [{ type: 'text', text: block.text, providerMetadata: { hapi: { blockId: block.id, localId: block.localId } } }],
             metadata: {
                 custom: {
                     kind: 'assistant',
@@ -560,7 +585,7 @@ function toThreadMessageLike(
             role: 'assistant',
             id: threadMessageId,
             createdAt: new Date(timestamp),
-            content: [{ type: 'reasoning', text: block.text }],
+            content: [{ type: 'reasoning', text: block.text, providerMetadata: { hapi: { blockId: block.id } } }],
             metadata: {
                 custom: {
                     kind: 'assistant',
@@ -633,7 +658,8 @@ function toThreadMessageLike(
             role: block.source === 'user' ? 'user' : 'assistant',
             id: threadMessageId,
             createdAt: new Date(timestamp),
-            content: [{ type: 'text', text: block.text }],
+            content: [{ type: 'text', text: block.text,
+                providerMetadata: { hapi: { blockId: block.id, kind: 'cli-output', source: block.source ?? 'assistant' } } }],
             metadata: {
                 custom: {
                     kind: 'cli-output',
@@ -899,6 +925,7 @@ export function useHappyRuntime(props: {
         () => aggregateResponseGroups(props.blocks),
         [props.blocks]
     )
+    const processDurations = useMemo(() => responseProcessDurations(props.blocks), [props.blocks])
     const responseGroupTimestamps = useMemo(
         () => getResponseGroupTimestamps(props.blocks),
         [props.blocks]
@@ -912,7 +939,12 @@ export function useHappyRuntime(props: {
                 responseGroupTimestamps.get(block) ?? getBlockPresentationTimestamp(block)
             )
             const aggregate = aggregates.get(block.id)
-            if (!aggregate) return message
+            const processDurationMs = processDurations.get(block.id)
+            if (!aggregate) return processDurationMs === undefined ? message : {
+                ...message, metadata: { ...message.metadata, custom: {
+                    ...message.metadata?.custom, processDurationMs,
+                } }
+            }
             const existing = message.metadata?.custom as HappyChatMessageMetadata | undefined
             return {
                 ...message,
@@ -925,12 +957,13 @@ export function useHappyRuntime(props: {
                         invokedAt: aggregate.invokedAt,
                         durationMs: aggregate.durationMs,
                         turnCount: aggregate.turnCount,
-                        roundSummary: aggregate.roundSummary
+                        roundSummary: aggregate.roundSummary,
+                        processDurationMs
                     } satisfies HappyChatMessageMetadata
                 }
             }
         },
-        [aggregates, responseGroupTimestamps]
+        [aggregates, responseGroupTimestamps, processDurations]
     )
 
     // Use cached message converter for performance optimization

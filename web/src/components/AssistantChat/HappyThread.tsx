@@ -13,6 +13,7 @@ import {
     type OlderHistoryLoadResult
 } from '@/components/AssistantChat/context'
 import { HappyAssistantMessage } from '@/components/AssistantChat/messages/AssistantMessage'
+import { WorkingStatus } from '@/components/AssistantChat/messages/ProcessMessageContent'
 import { HappyUserMessage } from '@/components/AssistantChat/messages/UserMessage'
 import { HappySystemMessage } from '@/components/AssistantChat/messages/SystemMessage'
 import { Button } from '@/components/ui/button'
@@ -1832,6 +1833,7 @@ export function HappyThread(props: {
                             )}
                             <div className="happy-thread-messages flex flex-col gap-3">
                                 <ThreadMessagesById components={THREAD_MESSAGE_COMPONENTS} />
+                                <WorkingStatus startedAt={props.session.activeTurnStartedAt} />
                             </div>
                         </div>
                     </div>

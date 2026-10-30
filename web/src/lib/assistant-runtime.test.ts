@@ -6,10 +6,22 @@ import {
     assignThreadMessageIdsWithStableWrappers,
     findLatestCompletedBoundaryId,
     getBlockPresentationTimestamp,
-    getResponseGroupTimestamps
+    getResponseGroupTimestamps,
+    responseProcessDurations
 } from './assistant-runtime'
 import type { AgentEventBlock, AgentTextBlock, CliOutputBlock, ToolCallBlock, UserTextBlock } from '@/chat/types'
 import { buildVisibleChatBlocks, type ToolGroupBlock, type VisibleChatBlock } from '@/chat/toolGroups'
+
+describe('desktop process elapsed time', () => {
+    it('uses invocation time and freezes completed history independently of the viewer clock', () => {
+        const blocks = [userText('u', { createdAt: 100, invokedAt: 1000 }), agentText('intro', { createdAt: 2000 }),
+            toolCall('t', { createdAt: 3000 }), agentText('final', { createdAt: 132000 })]
+        expect(responseProcessDurations(blocks).get('intro')).toBe(131000)
+        expect(responseProcessDurations([...blocks]).get('intro')).toBe(131000)
+        expect(responseProcessDurations([...blocks, userText('next', { createdAt: 200000 }),
+            agentText('next-answer', { createdAt: 205000 })]).get('next-answer')).toBe(5000)
+    })
+})
 
 // Minimal builders for VisibleChatBlock fixtures. Tests focus on metadata
 // aggregation behavior across response groups; non-metadata fields default to

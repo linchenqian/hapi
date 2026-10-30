@@ -5,6 +5,44 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TranscriptProcessTest {
+    @Test fun `desktop response collapses progress only after completion and keeps the clock start`() {
+        val source = listOf(user("u"), answer("intro"), thought("r"), tool("t"), answer("final"))
+        val projection = TranscriptProcessProjection()
+        val live = desktopTranscriptItems(source, emptySet(), true, 123L, projection)
+        assertTrue(live.any { it is TranscriptItem.Block && it.id == "intro" })
+        assertEquals(123L, (live.last() as TranscriptItem.Working).startedAt)
+        val done = desktopTranscriptItems(source, emptySet(), false, null, projection)
+        val worked = done.filterIsInstance<TranscriptItem.Process>().single()
+        assertTrue(worked.finished)
+        assertEquals(listOf("intro", "r", "t"), worked.blocks.map { it.stableId })
+        assertEquals("final", done.last().id)
+        assertFalse(done.any { it is TranscriptItem.Working })
+        // Live and completed disclosure ids intentionally differ: finish auto-collapses.
+        assertFalse(live.filterIsInstance<TranscriptItem.Process>().any { it.id == worked.id })
+        assertEquals(done, processDisplayRows(done, emptySet()))
+        assertTrue(processDisplayRows(done, setOf(worked.id)).any { it.id == "intro" })
+        assertEquals(123L, (desktopTranscriptItems(source, emptySet(), true, 123L, TranscriptProcessProjection()).last() as TranscriptItem.Working).startedAt)
+    }
+
+    @Test fun `desktop completed projection keeps media questions and all multipart final text visible`() {
+        val a = answer("a").let { AgentTextBlock(it.id, "final", 2, 1, text = it.text, meta = null) }
+        val b = answer("b").let { AgentTextBlock(it.id, "final", 3, 1, text = it.text, meta = null) }
+        val source = listOf(user("u"), thought("r"), tool("ask", "AskUserQuestion"),
+            GeneratedImageBlock("image", null, 1, 1, "image", "image.png", "image/png", null, null), a, b)
+        val rows = desktopTranscriptItems(source, emptySet(), false, null, TranscriptProcessProjection())
+        assertEquals(listOf("u", "ask", "image", "a", "b"), rows.filterIsInstance<TranscriptItem.Block>().map { it.id })
+        assertEquals("Worked for 2m 11s", workingLabel(false, 131999))
+        assertEquals("Working", workingLabel(true, null))
+    }
+
+    @Test fun `status events cannot create duplicate worked row keys within one response`() {
+        val event = AgentEventBlock("event", 2, 1, event = AgentEvent.of(kotlinx.serialization.json.buildJsonObject {
+            put("type", kotlinx.serialization.json.JsonPrimitive("ready"))
+        }), meta = null)
+        val rows = desktopTranscriptItems(listOf(user("u"), thought("a"), event, thought("b"), answer("final")),
+            emptySet(), false, null, TranscriptProcessProjection())
+        assertEquals(rows.size, rows.map { it.id }.distinct().size)
+    }
     private fun thought(id: String) = AgentReasoningBlock(id, null, 1, 1, text = "Thinking $id", meta = null)
     private fun answer(id: String) = AgentTextBlock(id, null, 1, 1, text = "Final $id", meta = null)
     private fun user(id: String) = UserTextBlock(id, null, 1, 1, "Question $id", null, null, null, null)

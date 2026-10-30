@@ -93,6 +93,8 @@ class ProcessCardSmokeTest {
         cache.prepare(setOf(reasoning, finalText, "我会检查代码并验证修复，过程可按需查看。"))
         val state = ChatUiState("smoke", ChatHeaderUi("Test", active = false, thinking = false, subtitle = null),
             "codex", null, blocks, emptyMap(), false, false, false, false, false, null, 0)
+        val processId = desktopTranscriptItems(blocks, emptySet(), false, null, TranscriptProcessProjection())
+            .filterIsInstance<TranscriptItem.Process>().single().id
         try {
             instrumentation.runOnMainSync {
                 if (Build.VERSION.SDK_INT >= 27) {
@@ -115,18 +117,18 @@ class ProcessCardSmokeTest {
                     } }
                 }
             }
-            await("collapsed card and final reply") { row("chat-process:r") != null && row("answer") != null }
+            await("collapsed process and final reply") { row(processId) != null && row("answer") != null }
             assertNull("A tool leaked out of the folded card", row("t"))
             assertNull("Reasoning leaked out of the folded card", row("r"))
             screenshot("process-card-collapsed.png")
-            click("chat-process:r")
+            click(processId)
             await("expanded tool") { row("t") != null }
             val thoughtHeight = row("r")!!.second
             click("r", 0.2f)
             await("expanded reasoning") { (row("r")?.second ?: 0) > thoughtHeight }
             screenshot("process-card-expanded.png")
-            click("chat-process:r:end")
-            await("collapsed again") { row("t") == null && row("chat-process:r") != null && row("answer") != null }
+            click("$processId:end")
+            await("collapsed again") { row("t") == null && row(processId) != null && row("answer") != null }
         } finally { instrumentation.runOnMainSync { activity?.finish() } }
     }
 }

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useMemo, useState } from 'react'
+import { ProcessDisclosureStore } from '@/components/AssistantChat/messages/processParts'
 import type { ApiClient } from '@/api/client'
 import type { TerminalToolDisplayMode } from '@/hooks/useToolCardDisplayMode'
 import type { SessionMetadataSummary } from '@/types/api'
@@ -7,6 +8,7 @@ import type { SessionMetadataSummary } from '@/types/api'
 export type OlderHistoryLoadResult = 'loaded' | 'transient-stop' | 'terminal-stop'
 
 export type HappyChatContextValue = {
+    processDisclosure?: ProcessDisclosureStore
     api: ApiClient
     sessionId: string
     metadata: SessionMetadataSummary | null
@@ -38,6 +40,7 @@ export type HappyChatContextValue = {
 const HappyChatContext = createContext<HappyChatContextValue | null>(null)
 
 export function HappyChatProvider(props: { value: HappyChatContextValue; children: ReactNode }) {
+    const processDisclosure = useMemo(() => new ProcessDisclosureStore(), [props.value.sessionId])
     // Keep dismissal outside virtualized cards so recycling cannot revive a menu.
     const [continued, setContinued] = useState<{ sessionId: string; ids: ReadonlySet<string> }>({
         sessionId: props.value.sessionId, ids: new Set()
@@ -45,6 +48,7 @@ export function HappyChatProvider(props: { value: HappyChatContextValue; childre
     const ids = continued.sessionId === props.value.sessionId ? continued.ids : new Set<string>()
     const value: HappyChatContextValue = {
         ...props.value,
+        processDisclosure,
         continuedPlanIds: ids,
         onContinuePlan: props.value.onContinuePlan ? (planId) => {
             if (props.value.disabled || props.value.codexPlanProposalId !== planId || ids.has(planId)) return

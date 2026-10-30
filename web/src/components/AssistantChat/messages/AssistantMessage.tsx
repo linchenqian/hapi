@@ -1,44 +1,21 @@
-import { MessagePrimitive, useAuiState, type TextMessagePart } from '@assistant-ui/react'
-import { Reasoning, ReasoningGroup } from '@/components/assistant-ui/reasoning'
-import { HappyToolMessage } from '@/components/AssistantChat/messages/ToolMessage'
-import { CliOutputBlock } from '@/components/CliOutputBlock'
+import { MessagePrimitive, useAuiState } from '@assistant-ui/react'
+import { ProcessMessageContent } from './ProcessMessageContent'
 import type { HappyChatMessageMetadata } from '@/lib/assistant-runtime'
 import { getAssistantCopyText } from '@/components/AssistantChat/messages/assistantCopyText'
 import { getConversationMessageAnchorId } from '@/chat/outline'
 import { CodexReviewCard } from '@/components/AssistantChat/messages/CodexReviewCard'
 import { MessageActions } from '@/components/AssistantChat/messages/MessageActions'
 import { useHappyChatContext } from '@/components/AssistantChat/context'
-import { NotifySummaryText } from '@/components/AssistantChat/messages/NotifySummaryText'
 import { useSessionSummaryInChat } from '@/hooks/useSessionSummaryInChat'
-
-const TOOL_COMPONENTS = {
-    Fallback: HappyToolMessage
-} as const
-
-const MESSAGE_PART_COMPONENTS = {
-    Text: NotifySummaryText,
-    Reasoning: Reasoning,
-    ReasoningGroup: ReasoningGroup,
-    tools: TOOL_COMPONENTS
-} as const
 
 export function HappyAssistantMessage() {
     const ctx = useHappyChatContext()
     const showSessionSummaryInChat = useSessionSummaryInChat()
     const messageId = useAuiState((s) => s.message.id)
     const elementId = getConversationMessageAnchorId(messageId)
-    const isCliOutput = useAuiState((s) => {
-        const custom = s.message.metadata.custom as Partial<HappyChatMessageMetadata> | undefined
-        return custom?.kind === 'cli-output'
-    })
     const codexReview = useAuiState((s) => {
         const custom = s.message.metadata.custom as Partial<HappyChatMessageMetadata> | undefined
         return custom?.kind === 'codex-review' ? custom.review : undefined
-    })
-    const cliText = useAuiState((s) => {
-        const custom = s.message.metadata.custom as Partial<HappyChatMessageMetadata> | undefined
-        if (custom?.kind !== 'cli-output') return ''
-        return s.message.content.find((part): part is TextMessagePart => part.type === 'text')?.text ?? ''
     })
     const toolOnly = useAuiState((s) => {
         if (s.message.role !== 'assistant') return false
@@ -78,11 +55,9 @@ export function HappyAssistantMessage() {
             data-hapi-message-role="assistant"
             className={`happy-message ${rootClass} scroll-mt-4`}
         >
-            {isCliOutput
-                ? <CliOutputBlock text={cliText} />
-                : codexReview
+            {codexReview
                     ? <CodexReviewCard review={codexReview} />
-                    : <MessagePrimitive.Content components={MESSAGE_PART_COMPONENTS} />}
+                    : <ProcessMessageContent />}
             <MessageActions
                 align="start"
                 copyText={copyText || undefined}

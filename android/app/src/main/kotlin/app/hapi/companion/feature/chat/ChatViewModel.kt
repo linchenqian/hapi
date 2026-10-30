@@ -155,6 +155,7 @@ data class ChatUiState(
     val messagesVersion: Long = 0,
     val requiresLatestReset: Boolean = false,
     val processSteps: Map<String, Int> = emptyMap(),
+    val activeTurnStartedAt: Long? = null,
 )
 
 /** Composer bar state (M3a). */
@@ -1930,6 +1931,7 @@ class ChatViewModel(
             historyVersion = window.historyVersion,
             messagesVersion = window.messagesVersion,
             requiresLatestReset = window.requiresLatestReset,
+            activeTurnStartedAt = inputs.detail?.activeTurnStartedAt,
         )
     }
 

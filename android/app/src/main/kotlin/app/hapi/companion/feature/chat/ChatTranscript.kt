@@ -69,14 +69,16 @@ internal fun ChatTranscript(
     val rowState = rememberSaveableStateHolder()
     val stateKeys = remember(state.sessionId) { mutableSetOf<String>() }
     val projection = remember(state.sessionId) { TranscriptProcessProjection() }
-    val sections = remember(state.blocks, state.processSteps, projection) { projection.project(state.blocks, state.processSteps.keys) }
+    val sections = remember(state.blocks, state.processSteps, state.header.thinking, state.activeTurnStartedAt, projection) {
+        desktopTranscriptItems(state.blocks, state.processSteps.keys, state.header.thinking, state.activeTurnStartedAt, projection)
+    }
     val expanded = rememberSaveable(state.sessionId, saver = listSaver<SnapshotStateMap<String, Boolean>, String>(
         save = { it.keys.toList() },
         restore = { mutableStateMapOf<String, Boolean>().apply { it.forEach { id -> put(id, true) } } },
     )) { mutableStateMapOf<String, Boolean>() }
     val expandedIds = expanded.keys.toSet()
     val rows = remember(sections, expandedIds) { processDisplayRows(sections, expandedIds) }
-    val activeProcessId = (sections.lastOrNull() as? TranscriptItem.Process)?.id.takeIf { state.header.thinking }
+    val activeProcessId = sections.filterIsInstance<TranscriptItem.Process>().lastOrNull()?.id.takeIf { state.header.thinking }
     val heights = remember(state.sessionId) { mutableMapOf<String, Int>() }
     val density = LocalDensity.current
     val estimatedHeight = with(density) { 100.dp.roundToPx() }
@@ -261,6 +263,7 @@ internal fun ChatTranscript(
                         .testTag("chat-row-" + row.id)
                     app.hapi.companion.ui.theme.ReadingColumn(modifier = rowModifier) {
                         when (row) {
+                            is TranscriptItem.Working -> WorkingStatus(row.startedAt)
                             is TranscriptItem.Process -> ProcessCard(row, row.id in expandedIds,
                                 working = activeProcessId == row.id,
                                 onToggle = {
