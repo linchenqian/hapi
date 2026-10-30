@@ -112,6 +112,20 @@ internal fun ChatScreen(
     readingState: TranscriptReadingState = rememberTranscriptReadingState(viewModel.sessionId),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val desktopTakeoverRequested by viewModel.desktopTakeoverRequested.collectAsState()
+    if (desktopTakeoverRequested) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.confirmDesktopTakeover(false) },
+            title = { Text(stringResource(R.string.chat_desktop_takeover_title)) },
+            text = { Text(stringResource(R.string.chat_desktop_takeover_warning)) },
+            confirmButton = { TextButton(onClick = { viewModel.confirmDesktopTakeover(true) }) {
+                Text(stringResource(R.string.chat_desktop_takeover_confirm))
+            } },
+            dismissButton = { TextButton(onClick = { viewModel.confirmDesktopTakeover(false) }) {
+                Text(stringResource(R.string.sessions_cancel))
+            } },
+        )
+    }
     val reconnecting by viewModel.reconnecting.collectAsState()
     val historyPaging by viewModel.historyPaging.collectAsState()
     val jumpToken by viewModel.jumpToken.collectAsState()

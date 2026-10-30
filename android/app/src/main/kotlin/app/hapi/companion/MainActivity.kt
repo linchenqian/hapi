@@ -90,6 +90,7 @@ class MainActivity : AppCompatActivity() {
             ) {
                 CompositionLocalProvider(LocalAppGraph provides appGraph) {
                     HapiNavigation()
+                    app.hapi.companion.update.UpdatePrompt(appGraph.updater)
                 }
             }
         }

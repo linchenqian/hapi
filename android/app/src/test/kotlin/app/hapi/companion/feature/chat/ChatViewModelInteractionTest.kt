@@ -167,6 +167,8 @@ private class RecordingChatApi : ChatSessionApi {
 
     var resumeResult: ResumeSessionResponse? = null
     val resumeCalls = MutableStateFlow<List<Pair<String, String?>>>(emptyList())
+    val resumeForceFlags = mutableListOf<Boolean>()
+    val resumeFailures = ArrayDeque<Exception>()
 
     var cancelResult: CancelMessageResponse = CancelMessageResponse(status = "cancelled")
     val cancelCalls = MutableStateFlow<List<String>>(emptyList())
@@ -237,8 +239,10 @@ private class RecordingChatApi : ChatSessionApi {
         planFailures.removeFirstOrNull()?.let { throw it }
     }
 
-    override suspend fun resumeSession(sessionId: String, permissionMode: String?): ResumeSessionResponse {
+    override suspend fun resumeSession(sessionId: String, permissionMode: String?, forceDesktopTakeover: Boolean): ResumeSessionResponse {
         resumeCalls.value = resumeCalls.value + (sessionId to permissionMode)
+        resumeForceFlags += forceDesktopTakeover
+        resumeFailures.removeFirstOrNull()?.let { throw it }
         return resumeResult ?: throw RuntimeException("resume not scripted")
     }
 
@@ -676,6 +680,58 @@ class ChatViewModelInteractionTest {
         assertEquals(IX_SESSION, harness.api.sendCalls.value[1].first)
         // Resume success reflects activity locally.
         assertTrue(harness.sessionStore.currentDetail(IX_SESSION)!!.active)
+    }
+
+    @Test
+    fun `desktop conflict waits for explicit consent before a single forced retry`() = runTest {
+        val harness = InteractionHarness(this, detail(active = false))
+        harness.api.sendFailures += ApiError(409, code = "session_inactive")
+        harness.api.resumeFailures += ApiError(500, body = "CODEX_DESKTOP_WRITER_CONFLICT")
+        harness.api.resumeResult = ResumeSessionResponse(sessionId = IX_SESSION)
+        harness.viewModel.start()
+        harness.viewModel.setComposerText("take over after confirmation")
+        harness.viewModel.sendMessage()
+        harness.viewModel.desktopTakeoverRequested.first { it }
+        assertEquals(listOf(false), harness.api.resumeForceFlags)
+        assertEquals(1, harness.api.sendCalls.value.size)
+        harness.viewModel.confirmDesktopTakeover(true)
+        harness.window().state.first { state -> state.messages.any { it.localId == "local-1" && it.status == MessageStatus.Sent } }
+        assertEquals(listOf(false, true), harness.api.resumeForceFlags)
+        assertEquals(2, harness.api.sendCalls.value.size)
+        assertFalse(harness.viewModel.desktopTakeoverRequested.value)
+    }
+
+    @Test
+    fun `canceling desktop takeover keeps the unsent local message without forcing or replaying`() = runTest {
+        val harness = InteractionHarness(this, detail(active = false))
+        harness.api.sendFailures += ApiError(409, code = "session_inactive")
+        harness.api.resumeFailures += ApiError(500, body = "CODEX_DESKTOP_WRITER_CONFLICT")
+        harness.viewModel.start()
+        harness.viewModel.setComposerText("do not interrupt desktop")
+        harness.viewModel.sendMessage()
+        harness.viewModel.desktopTakeoverRequested.first { it }
+        harness.viewModel.confirmDesktopTakeover(false)
+        harness.window().state.first { state -> state.messages.any { it.localId == "local-1" && it.status == MessageStatus.Failed } }
+        assertEquals(listOf(false), harness.api.resumeForceFlags)
+        assertEquals(1, harness.api.sendCalls.value.size)
+        assertFalse(harness.viewModel.desktopTakeoverRequested.value)
+    }
+
+    @Test
+    fun `failed forced retry cannot force again automatically`() = runTest {
+        val harness = InteractionHarness(this, detail(active = false))
+        harness.api.sendFailures += ApiError(409, code = "session_inactive")
+        harness.api.resumeFailures += ApiError(500, body = "CODEX_DESKTOP_WRITER_CONFLICT")
+        harness.api.resumeFailures += ApiError(500, body = "CODEX_DESKTOP_WRITER_CONFLICT")
+        harness.viewModel.start()
+        harness.viewModel.setComposerText("one confirmation only")
+        harness.viewModel.sendMessage()
+        harness.viewModel.desktopTakeoverRequested.first { it }
+        harness.viewModel.confirmDesktopTakeover(true)
+        harness.window().state.first { state -> state.messages.any { it.localId == "local-1" && it.status == MessageStatus.Failed } }
+        assertEquals(listOf(false, true), harness.api.resumeForceFlags)
+        assertEquals(1, harness.api.sendCalls.value.size)
+        assertFalse(harness.viewModel.desktopTakeoverRequested.value)
     }
 
     @Test

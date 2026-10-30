@@ -247,6 +247,9 @@
 
     <!-- Chat screen chrome (B-M2c/B-M3, extracted in B-M5a) -->
     <string name="chat_back">Back</string>
+    <string name="chat_desktop_takeover_title">Force desktop takeover?</string>
+    <string name="chat_desktop_takeover_confirm">Force takeover</string>
+    <string name="chat_desktop_takeover_warning">Desktop Codex owns this conversation. This stops its verified shared background process and may interrupt OTHER desktop conversations. The app stays open. HAPI releases its own execution after the queue is empty and idle for 30 seconds. Cancel to keep desktop work running.</string>
     <string name="chat_open_files">Session files</string>
     <string name="chat_open_scratchlist">Scratchlist</string>
     <string name="chat_open_scratchlist_count">Scratchlist (%1$d)</string>
@@ -627,4 +630,29 @@
     <string name="share_error_title">Share unavailable</string>
     <string name="share_ok">OK</string>
     <string name="share_pair_first">Pair a hub to choose a session for the shared content.</string>
+    <string name="chat_process_title">Thinking and actions</string>
+    <string name="chat_process_summary">Actions: %1$d · Thoughts: %2$d</string>
+    <string name="chat_process_errors">Errors: %1$d</string>
+    <string name="chat_process_collapsed">Collapsed. Tap to show the process.</string>
+    <string name="chat_process_expanded">Expanded. Tap to hide the process.</string>
+    <string name="chat_process_close">Collapse process</string>
+<string name="update_title">App updates</string>
+<string name="update_automatic">Automatically check for updates</string>
+<string name="update_source">Personal GitHub Release channel. Checks on opening the app and periodically in the background; timing depends on Android. Downloads and installation require your confirmation.</string>
+<string name="update_current">Installed: %1$s (%2$d)</string>
+<string name="update_available">Update available: %1$s</string>
+<string name="update_check">Check for updates</string>
+<string name="update_checking">Checking…</string>
+<string name="update_latest">You are up to date.</string>
+<string name="update_no_release">No personal Android release has been published yet.</string>
+<string name="update_download">Download update</string>
+<string name="update_install">Install downloaded update</string>
+<string name="update_later">Later</string>
+<string name="update_downloading">Downloading %1$d%% · Keep HAPI open</string>
+<string name="update_cancel">Cancel download</string>
+<string name="update_error_check">Cannot check GitHub right now. Check your connection and try again.</string>
+<string name="update_error_download">Download failed. Check your connection and retry.</string>
+<string name="update_error_apk">Package verification failed (hash, version, package or signature). Download again; nothing was installed.</string>
+<string name="update_error_install">Cannot open the Android installer. Check device security settings.</string>
+<string name="update_error_permission">Allow this HAPI app to install unknown apps in Android settings, then tap Install again. Device security restrictions may still prevent installation.</string>
 </resources>

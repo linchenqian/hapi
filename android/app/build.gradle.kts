@@ -18,6 +18,10 @@ plugins {
 // without it — Firebase then never initializes and PushBinding reports push as
 // unavailable, so every push code path no-ops cleanly.
 val officialBuild = providers.gradleProperty("hapiOfficialBuild").map(String::toBooleanStrict).orElse(false).get()
+// Sideloaded personal channel only. Play builds must never self-update.
+val selfUpdate = !officialBuild && providers.gradleProperty("hapiSelfUpdate").map(String::toBooleanStrict).orElse(true).get()
+val updateRepository = providers.gradleProperty("hapiUpdateRepository").orElse("linchenqian/hapi").get()
+require(updateRepository.matches(Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")))
 val googleServicesFile = file("google-services.json")
 if (officialBuild) {
     require(googleServicesFile.isFile) { "Official builds require app/google-services.json" }
@@ -82,6 +86,8 @@ android {
         // Tracks the hapi CLI/hub release train.
         versionName = providers.gradleProperty("hapiVersionName").orElse("0.33.3").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("boolean", "SELF_UPDATE_ENABLED", selfUpdate.toString())
+        buildConfigField("String", "UPDATE_REPOSITORY", "\"$updateRepository\"")
     }
 
     signingConfigs {
@@ -115,6 +121,17 @@ android {
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
+            buildConfigField("boolean", "SELF_UPDATE_ENABLED", "false")
+        }
+    }
+
+    // The manifest merger interprets tools:node before placeholder expansion.
+    // Select a small permission-only overlay rather than shipping it to Play.
+    sourceSets {
+        for (name in listOf("debug", "release")) {
+            getByName(name).manifest.srcFile(
+                if (selfUpdate) "src/personal/AndroidManifest.xml" else "src/noSelfUpdate/AndroidManifest.xml"
+            )
         }
     }
 

@@ -121,6 +121,8 @@ class AppGraph(context: Context) {
     /** Appearance choice (B-M4e); MainActivity reads it at setContent. */
     val themePrefs: ThemePrefs = ThemePrefs(appContext.hapiDataStore)
 
+    val updater = app.hapi.companion.update.AppUpdater(appContext, scope)
+
     /** Language choice (B-M5a: applied via per-app locales; Settings writes it). */
     val languagePrefs: LanguagePrefs = LanguagePrefs(appContext.hapiDataStore)
 
@@ -246,6 +248,7 @@ class AppGraph(context: Context) {
 
     /** Idempotent-enough for the single Application.onCreate call site. */
     fun start() {
+        updater.start()
         scope.launch {
             try {
                 shareInbox.load()
@@ -305,6 +308,7 @@ class AppGraph(context: Context) {
      */
     fun setForeground(foreground: Boolean) {
         isForeground = foreground
+        if (foreground) updater.onForeground()
         mutableActiveHubGraph.value?.setLifecycleForeground(foreground)
     }
 

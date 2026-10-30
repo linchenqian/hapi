@@ -66,6 +66,11 @@ fun SettingsGeneralScreen(
         onSetLanguage = viewModel::setLanguage,
         onRetryHubInfo = viewModel::retryHubInfo,
         onBack = onBack,
+        updates = {
+            if (BuildConfig.SELF_UPDATE_ENABLED) {
+                app.hapi.companion.update.UpdateSettings(app.hapi.companion.di.LocalAppGraph.current.updater)
+            }
+        },
     )
 }
 
@@ -82,6 +87,7 @@ internal fun SettingsGeneralContent(
     onSetLanguage: (AppLanguage) -> Unit,
     onRetryHubInfo: () -> Unit,
     onBack: () -> Unit,
+    updates: @Composable () -> Unit = {},
 ) {
     var showThemeDialog by rememberSaveable { mutableStateOf(false) }
     var showLanguageDialog by rememberSaveable { mutableStateOf(false) }
@@ -137,6 +143,8 @@ internal fun SettingsGeneralContent(
                     onClick = { showLanguageDialog = true },
                 )
             }
+
+            updates()
 
             SettingsSection(title = stringResource(R.string.settings_section_about)) {
                 SettingsRow(

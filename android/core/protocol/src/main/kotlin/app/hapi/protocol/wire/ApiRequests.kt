@@ -74,6 +74,7 @@ data class DenyPermissionRequest(
 @Serializable
 data class ResumeSessionRequest(
     val permissionMode: String? = null,
+    val forceDesktopTakeover: Boolean? = null,
 )
 
 /** `PATCH /api/sessions/:id` (`RenameSessionRequestSchema`, 1–255 chars). */

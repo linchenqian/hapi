@@ -197,12 +197,14 @@ class ChatTranscriptTest {
         // Keep the preceding row outside the content-padding/spacing band.
         // Exercise a partially visible summary, not an item-boundary ambiguity.
         browse(26, 20)
+        val processId = "chat-process:${group.id}"
+        compose.onNodeWithTag("chat-process-toggle-$processId").performClick()
         compose.onNodeWithText("12 tools").performClick()
         compose.waitForIdle()
         // Tapping a summary cannot change transcript membership or height.
-        assertEquals(group.id, anchor().first)
+        assertEquals(processId, anchor().first)
         compose.onNodeWithTag("chat-row-group-child-1").assertDoesNotExist()
-        compose.runOnIdle { assertEquals(82, list.layoutInfo.totalItemsCount) }
+        compose.runOnIdle { assertEquals(84, list.layoutInfo.totalItemsCount) }
         return group
     }
 
@@ -237,7 +239,7 @@ class ChatTranscriptTest {
             state.value = state.value.copy(blocks = rows(0..24) + group + rows(25..79), messagesVersion = 2)
         }
         browse(26, 0)
-        compose.onNodeWithTag("chat-row-${group.id}").assertIsDisplayed()
+        compose.onNodeWithTag("chat-row-chat-process:${group.id}").assertIsDisplayed()
         compose.onNodeWithTag("chat-row-group-child-1").assertDoesNotExist()
         compose.runOnIdle { assertEquals(82, list.layoutInfo.totalItemsCount) }
     }
@@ -353,6 +355,7 @@ class ChatTranscriptTest {
         )
         mount(blocks)
         browse(26, 0)
+        compose.onNodeWithTag("chat-process-toggle-chat-process:reasoning").performClick()
         compose.onNodeWithText("💭 Reasoning ▸").performClick()
         compose.onNodeWithText("Retained reasoning content").assertIsDisplayed()
         browse(55, 0)

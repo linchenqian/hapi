@@ -308,11 +308,11 @@ class HapiApi internal constructor(
      * `POST /api/sessions/:id/resume`. The returned `sessionId` may differ
      * from [sessionId] (superseding spawn) — migrate drafts and navigation.
      */
-    override suspend fun resumeSession(sessionId: String, permissionMode: String?): ResumeSessionResponse =
+    override suspend fun resumeSession(sessionId: String, permissionMode: String?, forceDesktopTakeover: Boolean): ResumeSessionResponse =
         request(
             "POST",
             url("api", "sessions", sessionId, "resume").build(),
-            ResumeSessionRequest(permissionMode).toJsonBody(),
+            ResumeSessionRequest(permissionMode, forceDesktopTakeover.takeIf { it }).toJsonBody(),
         )
 
     /** `POST /api/sessions/:id/reopen` — same superseding-id caveat as resume; 422 when metadata is incomplete. */

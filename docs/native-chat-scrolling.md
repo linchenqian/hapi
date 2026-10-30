@@ -137,6 +137,18 @@ cancels hidden history demand and dictation, and hides the IME. Back/Close alone
 never jumps to latest. Session events and SSE remain owned by the conversation
 host/holder, including while an inspector covers the thread and across rotation.
 
+Android additionally folds consecutive thinking, assistant terminal output and
+ordinary tool summaries into one **Thinking and actions** card by default.
+Prose/final replies, media, proposals, questions, pending approvals and child
+process entry points stay directly visible. This is a presentation layer only:
+the protocol blocks, full inspector data and synchronization remain unchanged.
+Expanding inserts individually keyed LazyColumn rows instead of an unbounded
+nested Column. Expansion is saved per group, whose key survives overlapping
+history prepends, streaming and trimming. Toggling pauses tail following;
+the footer's explicit collapse returns to the header. Hidden child state is
+retained while its data remains in the window. A growing folded count is display
+progress for history loading even when the card's height does not change.
+
 `ChatInspectionState` resolves live IDs and retains only selected snapshots for
 trimmed tools/messages/groups. A missing group keeps its previous membership;
 epoch invalidation clears selections and returns to the thread. Group browsing

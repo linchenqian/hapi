@@ -45,6 +45,32 @@ differences, pairing and features currently available through the web.
 
 ## Building
 
+### Personal sideload updates
+
+Personal builds include Settings → General → App updates. Checks run on
+foreground entry (six-hour throttle) and approximately every twelve hours via
+WorkManager; Android power/network restrictions can delay background checks.
+Only checks are automatic. Downloading and opening Android's installer require
+explicit taps. Keep the app open while downloading; interrupted downloads can
+be retried. The downloaded APK is private, excluded from backup, and rechecked
+for SHA-256, package, newer expected version, supported Android version and
+the installed signing certificate before granting installer access.
+
+The default public source is `linchenqian/hapi` (override with
+`-PhapiUpdateRepository=owner/repo`). Publish a release tagged
+`android-personal-<versionCode>` containing an uploaded asset named
+`hapi-android-personal.apk`; GitHub's asset `digest` must contain SHA-256.
+CLI/Hub/upstream release tags are ignored. Increment `-PhapiVersionCode`
+for every APK and preserve the installed signing key. The personal channel
+currently preserves the local debug signer for compatibility with existing
+installs; it is not an upstream/Play signing channel. Never publish the key.
+
+Use `-PhapiSelfUpdate=false` to opt a build out. Official
+`-PhapiOfficialBuild=true` builds always disable the feature and remove
+`REQUEST_INSTALL_PACKAGES`, regardless of the self-update property.
+Android or device security policies may require allowing HAPI to install
+unknown apps; these policies are never bypassed.
+
 Native chat scrolling architecture and acceptance checklist:
 [Native transcript scrolling](../docs/native-chat-scrolling.md).
 

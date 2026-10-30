@@ -183,7 +183,7 @@ private open class FakeMessagesApi : ChatSessionApi {
     override suspend fun clearConversation(sessionId: String): ResumeSessionResponse = error("Unexpected clear")
     override suspend fun implementCodexPlan(sessionId: String, planId: String) = error("Unexpected plan implementation")
 
-    override suspend fun resumeSession(sessionId: String, permissionMode: String?): ResumeSessionResponse =
+    override suspend fun resumeSession(sessionId: String, permissionMode: String?, forceDesktopTakeover: Boolean): ResumeSessionResponse =
         ResumeSessionResponse(sessionId = sessionId)
     override suspend fun approvePermission(sessionId: String, requestId: String, options: ApprovePermissionRequest) {}
     override suspend fun denyPermission(sessionId: String, requestId: String, decision: String?) {}

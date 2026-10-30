@@ -64,7 +64,7 @@ interface ChatSessionApi : MessagesApi, AttachmentUploadApi {
     suspend fun abortSession(sessionId: String)
 
     /** `POST /api/sessions/:id/resume` — the returned id may differ (superseding spawn). */
-    suspend fun resumeSession(sessionId: String, permissionMode: String? = null): ResumeSessionResponse
+    suspend fun resumeSession(sessionId: String, permissionMode: String? = null, forceDesktopTakeover: Boolean = false): ResumeSessionResponse
 
     /** `POST .../permissions/:rid/approve`; 404 not-pending, 409 `session_inactive`. */
     suspend fun approvePermission(

@@ -24,12 +24,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -46,10 +49,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
 private const val HISTORY_KEY = "chat-history-control"
-
-private data class TranscriptItem(val block: VisibleChatBlock) {
-    val id: String get() = block.stableId
-}
 
 /** Positive-order keys preserve the TOP reading anchor, including tall rows
  * whose bottom is still streaming. No prepend invokes scrollToItem. */
@@ -69,7 +68,15 @@ internal fun ChatTranscript(
 ) {
     val rowState = rememberSaveableStateHolder()
     val stateKeys = remember(state.sessionId) { mutableSetOf<String>() }
-    val rows = remember(state.blocks) { state.blocks.map(::TranscriptItem) }
+    val projection = remember(state.sessionId) { TranscriptProcessProjection() }
+    val sections = remember(state.blocks, state.processSteps, projection) { projection.project(state.blocks, state.processSteps.keys) }
+    val expanded = rememberSaveable(state.sessionId, saver = listSaver<SnapshotStateMap<String, Boolean>, String>(
+        save = { it.keys.toList() },
+        restore = { mutableStateMapOf<String, Boolean>().apply { it.forEach { id -> put(id, true) } } },
+    )) { mutableStateMapOf<String, Boolean>() }
+    val expandedIds = expanded.keys.toSet()
+    val rows = remember(sections, expandedIds) { processDisplayRows(sections, expandedIds) }
+    val activeProcessId = (sections.lastOrNull() as? TranscriptItem.Process)?.id.takeIf { state.header.thinking }
     val heights = remember(state.sessionId) { mutableMapOf<String, Int>() }
     val density = LocalDensity.current
     val estimatedHeight = with(density) { 100.dp.roundToPx() }
@@ -79,11 +86,12 @@ internal fun ChatTranscript(
     // Restore intent with LazyListState, otherwise the first tail effect
     // overwrites a saved history position on navigation/activity recreation.
     var followsTail by readingState::followsTail
+    var collapseTarget by remember(state.sessionId) { mutableStateOf<String?>(null) }
     var consumedJumpToken by rememberSaveable(state.sessionId) { mutableLongStateOf(0) }
     var correctingTail by remember(state.sessionId) { mutableStateOf(false) }
     var renderedHistoryVersion by remember(state.sessionId) { mutableLongStateOf(-1) }
     val currentRows by rememberUpdatedState(rows)
-    val rowIDs = remember(rows) { rows.mapTo(mutableSetOf()) { it.id } }
+    val rowIDs = remember(sections) { processProgressKeys(sections) }
     val currentIDs by rememberUpdatedState(rowIDs)
     val currentState by rememberUpdatedState(state)
     val currentJumpToken by rememberUpdatedState(jumpToken)
@@ -206,14 +214,24 @@ internal fun ChatTranscript(
             }
         }
     }
-    LaunchedEffect(rows) {
-        val live = rows.mapTo(mutableSetOf()) { it.id }
+    LaunchedEffect(sections) {
+        val live = processRetainedKeys(sections)
         heights.keys.retainAll(live)
         // Inspectors own their state; only retained transcript rows need leases here.
         val retained = live
         (stateKeys - retained).forEach(rowState::removeState)
         stateKeys.retainAll(retained)
         stateKeys.addAll(retained)
+        expanded.keys.retainAll(sections.filterIsInstance<TranscriptItem.Process>().mapTo(mutableSetOf()) { it.id })
+    }
+
+    LaunchedEffect(collapseTarget, rows) {
+        val target = collapseTarget ?: return@LaunchedEffect
+        val index = rows.indexOfFirst { it.id == target }
+        // Resolve the stable key against the current snapshot, including a
+        // history prepend that arrived at the same time as the user's tap.
+        if (index >= 0) listState.requestScrollToItem(index + 1)
+        collapseTarget = null
     }
 
     Box(modifier.fillMaxSize()) {
@@ -236,13 +254,34 @@ internal fun ChatTranscript(
             item(key = HISTORY_KEY, contentType = HISTORY_KEY) {
                 HistoryControl(paging.phase, state.hasMore, state.isSyncingTail, onRetryHistory)
             }
-            items(rows, key = { it.id }, contentType = { it.block.contentKind }) { row ->
+            items(rows, key = { it.id }, contentType = { it.contentKind }) { row ->
                 rowState.SaveableStateProvider(row.id) {
                     val rowModifier = Modifier
                         .onSizeChanged { heights[row.id] = it.height }
                         .testTag("chat-row-" + row.id)
                     app.hapi.companion.ui.theme.ReadingColumn(modifier = rowModifier) {
-                        ChatBlockCard(block = row.block, basePath = state.basePath, processSteps = state.processSteps[row.id])
+                        when (row) {
+                            is TranscriptItem.Process -> ProcessCard(row, row.id in expandedIds,
+                                working = activeProcessId == row.id,
+                                onToggle = {
+                                    followsTail = false
+                                    if (row.id in expanded) expanded.remove(row.id) else expanded[row.id] = true
+                                })
+                            is TranscriptItem.Block -> ChatBlockCard(
+                                block = row.block, basePath = state.basePath,
+                                processSteps = state.processSteps[row.id],
+                                modifier = if (row.processId != null) Modifier.padding(start = 12.dp) else Modifier,
+                            )
+                            is TranscriptItem.End -> TextButton(
+                                onClick = {
+                                    followsTail = false
+                                    expanded.remove(row.processId)
+                                    // Explicit user collapse, not a history-prepend correction.
+                                    collapseTarget = row.processId
+                                },
+                                modifier = Modifier.fillMaxWidth().testTag("chat-process-close-${row.processId}"),
+                            ) { Text(stringResource(R.string.chat_process_close)) }
+                        }
                     }
                 }
             }

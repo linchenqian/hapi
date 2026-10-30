@@ -414,6 +414,30 @@ class ChatViewModel(
 
     private val composerText = MutableStateFlow("")
     private val sendInFlight = MutableStateFlow(false)
+    private val mutableDesktopTakeoverRequested = MutableStateFlow(false)
+    val desktopTakeoverRequested: StateFlow<Boolean> = mutableDesktopTakeoverRequested
+    private var desktopTakeoverConfirmation: CompletableDeferred<Boolean>? = null
+
+    fun confirmDesktopTakeover(confirmed: Boolean) {
+        desktopTakeoverConfirmation?.complete(confirmed)
+    }
+
+    private suspend fun resumeForSend(): String {
+        return try {
+            api.resumeSession(sessionId, currentDetail()?.permissionMode).sessionId
+        } catch (error: Exception) {
+            if (error is CancellationException || !error.message.orEmpty().contains("CODEX_DESKTOP_WRITER_CONFLICT")) throw error
+            val confirmation = CompletableDeferred<Boolean>()
+            desktopTakeoverConfirmation = confirmation
+            mutableDesktopTakeoverRequested.value = true
+            val allowed = try { confirmation.await() } finally {
+                mutableDesktopTakeoverRequested.value = false
+                desktopTakeoverConfirmation = null
+            }
+            if (!allowed) throw error
+            api.resumeSession(sessionId, currentDetail()?.permissionMode, forceDesktopTakeover = true).sessionId
+        }
+    }
     private val importingShare = MutableStateFlow(false)
     private val draftReady = CompletableDeferred<Unit>()
     private val importedShares = mutableSetOf<String>()
@@ -1148,7 +1172,7 @@ class ChatViewModel(
         localId: String,
     ) {
         val targetSessionId = try {
-            api.resumeSession(sessionId, currentDetail()?.permissionMode).sessionId
+            resumeForSend()
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Exception) {

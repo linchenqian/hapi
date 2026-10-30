@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
+    <exclude domain="file" path="updates/" />
+    <exclude domain="sharedpref" path="app_updates.xml" />
     <exclude domain="sharedpref" path="hapi_push_identity.xml" />
 </full-backup-content>

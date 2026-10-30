@@ -90,6 +90,15 @@
                 android:resource="@xml/attachment_file_paths" />
         </provider>
 
+        <provider
+            android:name=".update.UpdateFileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_file_paths" />
+        </provider>
+
         <!-- zxing-android-embedded pins its stock CaptureActivity to
              sensorLandscape; this subclass keeps the pairing scan in portrait
              (selected via ScanOptions.setCaptureActivity). -->
