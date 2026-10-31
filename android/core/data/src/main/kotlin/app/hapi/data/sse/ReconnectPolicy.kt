@@ -3,10 +3,12 @@ package app.hapi.data.sse
 import kotlin.random.Random
 
 /**
- * The normative SSE reconnect constants and backoff schedule from
+ * SSE reconnect constants and backoff schedule based on
  * `docs/api/client-contract/sse.md` ("Reconnect policy") / the web reference
- * client (`web/src/hooks/useSSE.ts`). Pure — all randomness is injected so
- * tests can pin the exact schedule.
+ * client (`web/src/hooks/useSSE.ts`). Android keeps the foreground cap at
+ * 30 s even after repeated failures: mobile connectivity may recover without
+ * a route-identity change. Background retries are suspended by SseEngine.
+ * Pure — all randomness is injected so tests can pin the exact schedule.
  */
 object ReconnectPolicy {
     /** An attempt that has not completed the handshake in 10 s is hung — abandon it. */
@@ -29,26 +31,20 @@ object ReconnectPolicy {
     const val MAX_DELAY_MS: Long = 30_000
     /** Uniform 0..[JITTER_MS] (inclusive) added to every delay. */
     const val JITTER_MS: Int = 500
-    /** After this many consecutive failures the ceiling widens to [SLOW_MAX_DELAY_MS]. */
-    const val SLOW_AFTER_ATTEMPTS: Int = 8
-    /** A hub unreachable for 8 straight attempts is usually down for hours. */
-    const val SLOW_MAX_DELAY_MS: Long = 300_000
 
     /**
      * Delay before retry number `attempt` (0-based count of consecutive
      * failures so far, reset to 0 on every successful handshake):
      *
      * - attempt 0 → 0 ms exponential part (first retry is immediate, jitter only);
-     * - attempt n ≥ 1 → `min(cap, 1000 · 2^(n-1))`, where the cap is 30 s and
-     *   widens to 300 s once `n ≥ 8`;
+     * - attempt n ≥ 1 → `min(30000, 1000 · 2^(n-1))`;
      * - plus uniform jitter 0..500 ms on every delay.
      *
-     * Schedule (jitter aside): 0, 1s, 2s, 4s, 8s, 16s, 30s, 30s, 128s, 256s,
-     * 300s, 300s, …
+     * Schedule (jitter aside): 0, 1s, 2s, 4s, 8s, 16s, 30s, 30s, …
      */
     fun delayForAttempt(attempt: Int, random: Random): Long {
         require(attempt >= 0) { "attempt must be >= 0, got $attempt" }
-        val cap = if (attempt >= SLOW_AFTER_ATTEMPTS) SLOW_MAX_DELAY_MS else MAX_DELAY_MS
+        val cap = MAX_DELAY_MS
         val exponential = when {
             attempt == 0 -> 0L
             // 2^(n-1) would overflow / always exceed the cap long before n=63.

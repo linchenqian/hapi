@@ -7,6 +7,7 @@ import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import okhttp3.Dispatcher
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -128,6 +129,13 @@ class OkHttpSseTransport(
         .build()
 
     override fun open(url: String, lastEventId: String?): Flow<TransportEvent> = callbackFlow {
+        // Cancelling an HTTP/2 EventSource only resets its stream. Reusing
+        // the pool can put every retry back onto the same half-open mobile
+        // socket. A subscription attempt owns its socket, not a shared pool;
+        // zero idle connections also closes it after asynchronous cancellation.
+        val attemptClient = client.newBuilder()
+            .connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS))
+            .build()
         val request = Request.Builder()
             .url(url)
             .apply {
@@ -161,7 +169,10 @@ class OkHttpSseTransport(
             }
         }
 
-        val source = EventSources.createFactory(client).newEventSource(request, listener)
-        awaitClose { source.cancel() }
+        val source = EventSources.createFactory(attemptClient).newEventSource(request, listener)
+        awaitClose {
+            source.cancel()
+            attemptClient.connectionPool.evictAll()
+        }
     }
 }

@@ -307,7 +307,7 @@ class SseEngineTest {
     }
 
     @Test
-    fun `backoff schedule follows the normative curve including the widened ceiling`() = runTest {
+    fun `backoff schedule stays capped while the mobile app is foregrounded`() = runTest {
         val h = harness()
         h.engine.subscribe(SseSubscriptionKey.Global)
         val openTimes = mutableListOf<Long>()
@@ -320,10 +320,31 @@ class SseEngineTest {
         assertEquals(
             listOf(
                 0L, 1_000L, 2_000L, 4_000L, 8_000L, 16_000L, 30_000L, 30_000L,
-                128_000L, 256_000L, 300_000L, 300_000L,
+                30_000L, 30_000L, 30_000L, 30_000L,
             ),
             deltas,
         )
+    }
+
+    @Test
+    fun `session recovers from a prolonged outage without navigation and preserves its cursor`() = runTest {
+        val h = harness()
+        val key = SseSubscriptionKey.Session("s-1")
+        h.engine.subscribe(key)
+        val first = h.awaitOpen()
+        first.handshake()
+        first.event("cursor-before-outage", SESSION_REMOVED)
+        runCurrent()
+        first.fail(null)
+        repeat(12) { h.awaitOpen().fail(503) }
+        val failedAt = testScheduler.currentTime
+        val recovered = h.awaitOpen()
+        assertTrue(testScheduler.currentTime - failedAt <= 30_500,
+            "Recovered networks must not wait minutes or require reopening the chat")
+        assertEquals("cursor-before-outage", recovered.lastEventId)
+        recovered.handshake()
+        runCurrent()
+        assertEquals(ConnectionState.Phase.Connected, h.engine.connectionState(key).value.phase)
     }
 
     @Test

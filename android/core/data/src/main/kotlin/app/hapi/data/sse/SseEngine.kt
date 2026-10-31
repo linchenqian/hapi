@@ -82,7 +82,7 @@ sealed interface EngineEvent {
  *   (at-least-once; per the contract, handlers must be idempotent);
  * - 90 s staleness watchdog ticking every 10 s (any frame counts, heartbeats
  *   included; checks skipped while backgrounded);
- * - exponential backoff 1 s → 30 s (300 s after 8 attempts) + jitter, first
+ * - exponential backoff 1 s → 30 s + jitter, first
  *   retry immediate, attempt counter reset on every successful handshake;
  * - one silent token refresh per cycle on 401, costing no backoff attempt;
  * - [setLifecycleForeground]: backgrounding defers retries but keeps a live

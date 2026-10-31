@@ -19,6 +19,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okio.Buffer
 
 /**
@@ -27,6 +29,52 @@ import okio.Buffer
  * including the hub's flush-per-event gzip framing (`sse.md#gzip`).
  */
 class OkHttpSseTransportTest {
+
+    @Test
+    fun `restarting SSE does not evict a shared REST client's healthy HTTP2 connection`() {
+        server.protocols = listOf(Protocol.H2_PRIOR_KNOWLEDGE)
+        val base = OkHttpClient.Builder().protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE)).build()
+        try {
+            server.enqueue(MockResponse().setBody("before"))
+            base.newCall(okhttp3.Request.Builder().url(server.url("/health")).build()).execute().use {
+                assertEquals("before", it.body?.string())
+            }
+            server.enqueue(MockResponse().setHeader("Content-Type", "text/event-stream")
+                .setBody("data: {}\n\n").setBodyDelay(30, TimeUnit.SECONDS))
+            runBlocking {
+                withTimeout(5_000) { OkHttpSseTransport(base).open(eventsUrl(), null).take(1).toList() }
+            }
+            server.enqueue(MockResponse().setBody("after"))
+            base.newCall(okhttp3.Request.Builder().url(server.url("/health")).build()).execute().use {
+                assertEquals("after", it.body?.string())
+            }
+            assertEquals(0, server.takeRequest(5, TimeUnit.SECONDS)?.sequenceNumber)
+            assertEquals(0, server.takeRequest(5, TimeUnit.SECONDS)?.sequenceNumber)
+            assertEquals(1, server.takeRequest(5, TimeUnit.SECONDS)?.sequenceNumber,
+                "SSE cleanup must never evict the REST client's connection pool")
+        } finally { base.connectionPool.evictAll() }
+    }
+
+    @Test
+    fun `retry after a stalled HTTP2 stream opens a fresh connection instead of recycling its socket`() {
+        // A stream cancellation only resets the HTTP/2 stream, not its TCP
+        // connection. Mobile route changes can leave that pooled socket dead.
+        server.protocols = listOf(Protocol.H2_PRIOR_KNOWLEDGE)
+        val base = OkHttpClient.Builder().protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE)).build()
+        val transport = OkHttpSseTransport(base)
+        val handshake = "data: {\"type\":\"connection-changed\",\"data\":{\"status\":\"connected\"}}\n\n"
+        server.enqueue(MockResponse().setHeader("Content-Type", "text/event-stream")
+            .setBody(handshake).setBodyDelay(30, TimeUnit.SECONDS))
+        server.enqueue(MockResponse().setHeader("Content-Type", "text/event-stream").setBody(handshake))
+        runBlocking {
+            withTimeout(5_000) { transport.open(eventsUrl(), null).take(1).toList() }
+            withTimeout(5_000) { transport.open(eventsUrl(), null).take(2).toList() }
+        }
+        assertEquals(0, server.takeRequest(5, TimeUnit.SECONDS)?.sequenceNumber)
+        assertEquals(0, server.takeRequest(5, TimeUnit.SECONDS)?.sequenceNumber,
+            "The reconnect contract requires a fresh socket, not another stream on the stalled socket")
+        base.connectionPool.evictAll()
+    }
 
     private lateinit var server: MockWebServer
 

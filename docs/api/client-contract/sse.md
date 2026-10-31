@@ -104,6 +104,15 @@ These constants come from the web reference client (`web/src/hooks/useSSE.ts`) a
 
 Any received frame — heartbeat included — counts as activity for the staleness clock. Do not rely on a platform SSE library's built-in auto-reconnect: it will not honor the backoff, the background deferral, or the connect timeout.
 
+Android's mobile policy deliberately keeps the foreground backoff capped at
+30 seconds (+ jitter), rather than applying the five-minute slow ceiling.
+Connectivity can recover without a new default-network identity; the user
+must not need to leave and reopen the chat to reset a minutes-long wait.
+Each Android SSE attempt also owns a fresh connection pool: cancelling an
+HTTP/2 stream must not put the next attempt back on the same half-open TCP
+socket. Background retries remain suspended, and per-subscription replay
+cursors are retained across reconnects.
+
 ---
 
 ## Dual-subscription model
